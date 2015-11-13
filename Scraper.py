@@ -1,5 +1,7 @@
 from bs4 import BeautifulSoup
 import requests
+import json
+import os
 
 class Scraper:
     """Scraper object serves as a super class to all website scrapers. All
@@ -36,10 +38,15 @@ class Scraper:
         """Dumps the contents of data into "filename" placed in the "data"
         directory. If no directory with the name data is found, one will be
         created.
-
-        TODO: Implement
         """
-        pass
+        target = os.getcwd() + '/../data'
+        if not os.path.isdir(target):
+            os.mkdir(target)
+        output = os.path.join(target, filename)
+        with open(output, 'wb') as f:
+            f.write(json.dumps(self.data))
+            f.close()
+
 
 class BuzzScraper(Scraper):
     """An object that scrapes BuzzFeed for article names.
