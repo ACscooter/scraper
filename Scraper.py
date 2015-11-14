@@ -20,7 +20,10 @@ class Scraper:
         raise NotImplementedError
 
     def soup(self, url):
-        """Returns a BeautifulSoup object for the given url."""
+        """Returns a BeautifulSoup object for the given url.
+
+        TODO: Implement exception handling if there's no response from request
+        """
         result = requests.get(url)
         return BeautifulSoup(result.text, "html.parser")
 
@@ -66,12 +69,10 @@ class BuzzScraper(Scraper):
     """
 
     TARGET_URL = "http://www.buzzfeed.com/{}?p=11&z=4POKDW&r={}"
-    DIV_SEARCH = {'class' : 'section Column1'}
 
     def __init__(self, page_limit = -1):
         Scraper.__init__(self)
         self.page_limit = page_limit
-        self.searcher = lambda t : t.has_attr('id') and "post" in tag['id'] and t.has_attr('rel:data')
 
     def scrape(self, community):
         """Returns a collection of articles scraped from the given BuzzFeed
@@ -83,7 +84,7 @@ class BuzzScraper(Scraper):
         """
         documents = []
         if page_limit != -1:
-            for page in range(1, page_limit + 1):
+            for page in range(1, self.page_limit + 1):
                 url = self.TARGET_URL.format(community, page)
                 documents += self.find_data(url)
         else:
@@ -108,19 +109,98 @@ class BuzzScraper(Scraper):
         Makes a call to self.soup which returns a BeautifulSoup object after
         parsing through the url's HTML.
         """
+        searcher = lambda t : t.has_attr('id') and "post" in tag['id'] and t.has_attr('rel:data')
         soup = self.soup(url)
-        documents = soup.find_all("div", self.DIV_SEARCH).find_all(self.searcher)
+        documents = soup.find_all("div", {'class' : 'section Column1'}).find_all(searcher)
         return [r['rel:data'] for r in documents]
 
 class ClickHoleScraper(Scraper):
-    """An object that scrapes Click Hole.
+    """An object that scrapes ClickHole for article names.
 
-    Note: You may want to wrap this package in python
-    https://www.npmjs.com/package/clickhole-headlines
+    ClickHoleScraper requires that the community be provided by the users. It
+    also allows users to scrape by page. By default, the page limit is set to
+    -1.
+
+    The current format of ClickHole does not provide a data json for each
+    article like BuzzFeed does. Instead, all articles can be found in an <h2>
+    tag with the class titled "headline". These h2 tags are nested under
+    <article> tags which are unique to article listings.
+
+    TODO: Provide some kind of exception if it is not a proper community.
     """
+
+    TARGET_URL = "http://www.clickhole.com/features/{}/?page={}"
+
+    def __init__(self, page_limit = -1):
+        Scraper.__init__(self)
+        self.page_limit = page_limit
+
+    def scrape(self, community):
+        """Returns a collection of articles scraped from ClickHole. It also
+        stores two extra keys: publisher and store_key. The publisher is
+        ClickHole and the store_key is as described above.
+        """
+        documents = []
+        if page_limit != -1:
+            for page in range(1, self.page_limit + 1):
+                url = self.TARGET_URL.format(community, page)
+                documents += self.find_data(url)
+        else:
+            i = 0
+            page = 1
+            while i < self.document_limit:
+                url = self.TARGET_URL.format(community, page)
+                for d in self.find_data(url):
+                    documents.append(d)
+                    i += 1
+                page += 1
+
+        for doc in documents:
+            doc['publisher'] = "ClickHole"
+            doc['store_key'] = "ClickHole-" + doc['article_id']
+
+        tags = ['name', 'publisher', 'store_key', 'article_id']
+        self.load(documents, 'store_key', tags)
+
+
+    def find_data(url):
+        """Creates a preliminary list of dictionary objects that contain the
+        keys name (for article name) and article_id (the unique article id as
+        it is stored on ClickHole servers). The article name is formatted by
+        trimming the first and last characters. This is due to the fact that
+        each article name is surrounded by a line break character.
+        """
+        results = []
+        soup = self.soup(url)
+        articles = soup.find_all("article")
+        for a in articles:
+            name = a.find("h2", {'class' : 'headline'}).text
+            results.append({'name' : name[1 : len(name) - 1],
+                'article_id' : a['id']
+            })
+        return results
+
+class UpworthyScraper(Scraper):
+    """An object that scrapes Upworthy.
+
+    TODO: Implement
+    """
+
+class UproxxScraper(Scraper):
+    """An object that scrapes Uproxx.
+
+    TODO: Implement
+    """
+
 
 class GoogleScraper(Scraper):
     """An object that scrapes Google News.
+
+    TODO: Implement
+    """
+
+class NewYorkerScraper(Scraper):
+    """An object that scrapes New Yorker article titles.
 
     TODO: Implement
     """
